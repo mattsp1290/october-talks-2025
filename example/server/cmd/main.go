@@ -55,7 +55,7 @@ func registerRoutes(app *fiber.App, cfg *config.Config) {
 	}
 
 	// Feature routes
-	app.Post("/tool_based_generative_ui", routes.ToolBasedGenerativeUIHandler(cfg))
+	app.Post("/agentic", routes.AgenticHandler(cfg))
 }
 
 func logConfig(logger *logrus.Logger, cfg *config.Config) {

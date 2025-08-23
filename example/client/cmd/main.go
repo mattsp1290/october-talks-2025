@@ -129,7 +129,7 @@ func (m model) View() string {
 func chat(ctx context.Context, msg string, p *tea.Program) error {
 	logger := logrus.New()
 	logger.SetLevel(logrus.FatalLevel)
-	endpoint := "http://localhost:8000/predictive_state_updates"
+	endpoint := "http://localhost:8000/agentic"
 	sseConfig := sse.Config{
 		Endpoint:       endpoint,
 		ConnectTimeout: 30 * time.Second,
