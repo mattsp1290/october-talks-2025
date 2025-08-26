@@ -6,10 +6,12 @@ go 1.24.4
 replace github.com/mattsp1290/ag-ui/go-sdk => /Users/punk1290/git/ag-ui/go-sdk
 
 require (
+	github.com/76creates/stickers v1.4.1
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/mattsp1290/ag-ui/go-sdk v0.0.0-20250816203601-e173ef3a0e9a
+	github.com/mattsp1290/sweetie16 v0.0.0-20250825222051-a0bfd5a854f0
 	github.com/sirupsen/logrus v1.9.3
 )
 

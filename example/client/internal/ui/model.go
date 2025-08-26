@@ -1,32 +1,145 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
+	"time"
 
+	"github.com/76creates/stickers/flexbox"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/message"
+	"github.com/mattsp1290/sweetie16/pkg/color"
 )
 
-const gap = "\n\n"
-
-type (
-	errMsg error
+var (
+	styleBackground    = lipgloss.NewStyle().Align(lipgloss.Center).Background(color.BlackColor)
+	chatStyle          = lipgloss.NewStyle().Align(lipgloss.Left).Background(color.BlackColor)
+	inputStyle         = lipgloss.NewStyle().Align(lipgloss.Left).Background(color.BlackColor)
+	dividerStyle       = lipgloss.NewStyle().Align(lipgloss.Center).Background(color.BlackColor)
+	userNameStyle      = lipgloss.NewStyle().Foreground(color.BlueColor)
+	userInputStyle     = lipgloss.NewStyle().Foreground(color.LightGreyColor)
+	assistantNameStyle = lipgloss.NewStyle().Foreground(color.RedColor)
+	tableRowIndex      = 1
+	tableCellIndex     = 1
+	cellString         = "Hello World"
 )
 
-type Model struct {
-	viewport    viewport.Model
-	messages    []string
-	textarea    textarea.Model
-	senderStyle lipgloss.Style
-	userInput   chan string
-	err         error
+type UIMessage struct {
+	User      string
+	Content   string
+	Timestamp string
 }
 
-func InitialModel(userInput chan string) Model {
+func NewUIMessage(user, content string) UIMessage {
+	// now
+	timestamp := time.Now().Format("15:04:05")
+	if strings.Contains(user, "You") {
+		content = userInputStyle.Render(content)
+	}
+	return UIMessage{
+		User:      user,
+		Content:   content,
+		Timestamp: timestamp,
+	}
+}
+
+type Model struct {
+	flexBox   *flexbox.FlexBox
+	table     table.Model
+	chatRow   *flexbox.Row
+	helpRow   *flexbox.Row
+	statusRow *flexbox.Row
+	inputRow  *flexbox.Row
+	messages  []UIMessage
+	textarea  textarea.Model
+	userInput chan string
+	err       error
+}
+
+func getBox() *flexbox.FlexBox {
+	box := flexbox.New(0, 0).SetStyle(styleBackground)
+	return box
+}
+
+func getChatRow(box *flexbox.FlexBox) *flexbox.Row {
+	return box.NewRow().AddCells(
+		flexbox.NewCell(9, 10).SetStyle(chatStyle),
+		flexbox.NewCell(1, 10).SetStyle(dividerStyle),
+		flexbox.NewCell(3, 10).SetStyle(styleBackground),
+	)
+}
+
+func getInputRow(box *flexbox.FlexBox) *flexbox.Row {
+	return box.NewRow().AddCells(
+		flexbox.NewCell(9, 2).SetStyle(inputStyle),
+		flexbox.NewCell(1, 2).SetStyle(dividerStyle),
+	)
+}
+
+func getStatusBar(box *flexbox.FlexBox) *flexbox.Row {
+	return box.NewRow().AddCells(
+		flexbox.NewCell(1, 1).SetStyle(dividerStyle),
+		flexbox.NewCell(9, 1).SetStyle(styleBackground),
+		flexbox.NewCell(1, 1).SetStyle(dividerStyle),
+	)
+}
+
+func getHelpBar(box *flexbox.FlexBox) *flexbox.Row {
+	return box.NewRow().AddCells(
+		flexbox.NewCell(9, 1).SetStyle(styleBackground),
+		flexbox.NewCell(1, 1).SetStyle(dividerStyle),
+	)
+}
+
+func getTableStyle() table.Styles {
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(color.LightGreyColor).
+		BorderBottom(false).
+		Bold(false)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color(color.LightBlueColor)).
+		Background(lipgloss.Color(color.DarkBlueColor)).
+		Bold(false)
+	return s
+}
+
+func getColumns() []table.Column {
+	return []table.Column{
+		{Title: "Time", Width: 15},
+		{Title: "User", Width: 35},
+		{Title: "Message", Width: 150},
+	}
+}
+
+func getRows(messages []UIMessage) []table.Row {
+	var rows []table.Row
+	for _, msg := range messages {
+		rows = append(rows, table.Row{
+			msg.Timestamp,
+			msg.User,
+			msg.Content,
+		})
+	}
+	return rows
+}
+
+func getTable(rows []table.Row) table.Model {
+	t := table.New(
+		table.WithColumns(getColumns()),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithWidth(250),
+	)
+	t.SetStyles(getTableStyle())
+
+	return t
+}
+
+func getTextarea() textarea.Model {
 	ta := textarea.New()
 	ta.Placeholder = "Send a message..."
 	ta.Focus()
@@ -38,58 +151,73 @@ func InitialModel(userInput chan string) Model {
 	ta.SetHeight(3)
 
 	// Remove cursor line styling
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.FocusedStyle.CursorLine = inputStyle
+	ta.FocusedStyle.Text = inputStyle
+	ta.BlurredStyle.Text = inputStyle
 
 	ta.ShowLineNumbers = false
+	return ta
+}
 
-	vp := viewport.New(30, 5)
-	vp.SetContent("Welcome to the chat room!\nType a message and press Enter to send.")
+func InitialModel(userInput chan string) *Model {
+	box := getBox()
+	chatRow := getChatRow(box)
+	textareaRow := getInputRow(box)
+	statusRow := getStatusBar(box)
+	helpRow := getHelpBar(box)
+	rows := []*flexbox.Row{chatRow, textareaRow, statusRow, helpRow}
 
-	ta.KeyMap.InsertNewline.SetEnabled(false)
+	box.AddRows(rows)
 
-	return Model{
-		textarea:    ta,
-		messages:    []string{},
-		viewport:    vp,
-		userInput:   userInput,
-		senderStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
-		err:         nil,
+	return &Model{
+		flexBox:   box,
+		table:     getTable(nil),
+		userInput: userInput,
+		chatRow:   chatRow,
+		helpRow:   helpRow,
+		statusRow: statusRow,
+		inputRow:  textareaRow,
+		textarea:  getTextarea(),
 	}
 }
 
-func (m Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	return textarea.Blink
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		tiCmd tea.Cmd
-		vpCmd tea.Cmd
 	)
 
 	m.textarea, tiCmd = m.textarea.Update(msg)
-	m.viewport, vpCmd = m.viewport.Update(msg)
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.viewport.Width = msg.Width
-		m.textarea.SetWidth(msg.Width)
-		m.viewport.Height = msg.Height - m.textarea.Height() - lipgloss.Height(gap)
-
+		windowHeight := msg.Height
+		windowWidth := msg.Width
+		m.flexBox.SetWidth(windowWidth)
+		m.flexBox.SetHeight(windowHeight)
+		m.table.SetWidth(windowWidth)
+		m.table.SetHeight(windowHeight)
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
-			fmt.Println(m.textarea.Value())
 			return m, tea.Quit
 		case tea.KeyEnter:
 			m.userInput <- m.textarea.Value()
-			m.messages = append(m.messages, m.senderStyle.Render("You: ")+m.textarea.Value())
+
+			uiMsg := NewUIMessage(inputStyle.Render("You"), m.textarea.Value())
+			m.messages = append(m.messages, uiMsg)
 			//m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
 			m.textarea.Reset()
 			//m.viewport.GotoBottom()
 		}
 	case *message.Message:
-		m.messages = append(m.messages, msg.Strings()...)
+		for _, currMsg := range msg.Strings() {
+			uiMsg := NewUIMessage(assistantNameStyle.Render("Assistant"), currMsg)
+			m.messages = append(m.messages, uiMsg)
+		}
 
 	// We handle errors just like any other message
 	case errMsg:
@@ -97,20 +225,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if len(m.messages) > 0 {
-		// Wrap content before setting it.
-		m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
-		m.viewport.GotoBottom()
-	}
-
-	return m, tea.Batch(tiCmd, vpCmd)
+	return m, tea.Batch(tiCmd)
 }
 
-func (m Model) View() string {
-	return fmt.Sprintf(
-		"%s%s%s",
-		m.viewport.View(),
-		gap,
-		m.textarea.View(),
-	)
+func (m *Model) View() string {
+	m.flexBox.ForceRecalculate()
+	var cell *flexbox.Cell
+	if m.chatRow != nil {
+		cell = m.chatRow.GetCell(0)
+	}
+
+	if m.chatRow != nil && cell != nil {
+		tbl := getTable(getRows(m.messages))
+		m.table = tbl
+		m.table.SetWidth(cell.GetWidth())
+		m.table.SetHeight(cell.GetHeight())
+		cell.SetContent(m.table.View())
+	}
+
+	if m.inputRow != nil {
+		m.inputRow.GetCell(0).SetContent(m.textarea.View())
+	}
+
+	return m.flexBox.Render()
 }

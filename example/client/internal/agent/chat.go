@@ -6,17 +6,19 @@ import (
 	"fmt"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattsp1290/ag-ui/go-sdk/pkg/client/sse"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/event"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/message"
 	"github.com/sirupsen/logrus"
 )
 
-func Chat(ctx context.Context, msg string, p *tea.Program) error {
+func DefaultEndpoint() string {
+	return "http://localhost:8000/agentic"
+}
+
+func Chat(ctx context.Context, inputMsg string, endpoint string, send func(msg *message.Message)) error {
 	logger := logrus.New()
 	logger.SetLevel(logrus.FatalLevel)
-	endpoint := "http://localhost:8000/agentic"
 	sseConfig := sse.Config{
 		Endpoint:       endpoint,
 		ConnectTimeout: 30 * time.Second,
@@ -43,7 +45,7 @@ func Chat(ctx context.Context, msg string, p *tea.Program) error {
 			{
 				"id":      "msg-1",
 				"role":    "user",
-				"content": msg,
+				"content": inputMsg,
 			},
 		},
 		"tools":          []interface{}{}, // Request tool discovery
@@ -78,7 +80,8 @@ func Chat(ctx context.Context, msg string, p *tea.Program) error {
 			if currMsg == nil {
 				return fmt.Errorf("failed to parse message %w", err)
 			}
-			p.Send(currMsg)
+			send(currMsg)
+			//p.Send(currMsg)
 
 		case err, ok := <-errorCh:
 			if !ok {

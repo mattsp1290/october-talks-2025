@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/requestid"
 	"github.com/mattsp1290/october-talks-2025/example/server/internal/config"
+	"github.com/mattsp1290/october-talks-2025/example/server/internal/mcp"
 	"github.com/mattsp1290/october-talks-2025/example/server/internal/routes"
 	"github.com/sirupsen/logrus"
 )
@@ -135,6 +136,20 @@ func main() {
 
 	logger.WithField("address", serverAddr).Info("Server started successfully")
 
+	// Start mcp in a goroutine
+	mcpServer, err := mcp.NewServer(mcp.DefaultPort)
+	if err != nil {
+		logger.WithError(err).Error("Failed to create MCP server")
+		os.Exit(1)
+	}
+	go func() {
+		err := mcpServer.Start()
+		if err != nil {
+			logger.WithError(err).Error("MCP server failed to start")
+			os.Exit(1)
+		}
+	}()
+
 	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -146,7 +161,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := app.ShutdownWithContext(ctx); err != nil {
+	err = mcpServer.Shutdown(ctx)
+	if err != nil {
+		logger.WithError(err).Error("MCP server shutdown error")
+	}
+
+	if err = app.ShutdownWithContext(ctx); err != nil {
 		logger.WithError(err).Error("Server shutdown error")
 		os.Exit(1)
 	}

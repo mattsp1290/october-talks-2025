@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/agent"
+	"github.com/mattsp1290/october-talks-2025/example/client/internal/message"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/ui"
 )
 
@@ -22,9 +23,13 @@ func main() {
 	userInputCh := make(chan string)
 	p := tea.NewProgram(ui.InitialModel(userInputCh), tea.WithAltScreen())
 
+	sendUserInput := func(msg *message.Message) {
+		p.Send(msg)
+	}
 	go func() {
+
 		for msg := range userInputCh {
-			err := agent.Chat(context.Background(), msg, p)
+			err := agent.Chat(context.Background(), msg, agent.DefaultEndpoint(), sendUserInput)
 			if err != nil {
 				log.Fatal(err)
 			}

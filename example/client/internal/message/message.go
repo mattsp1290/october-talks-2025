@@ -23,10 +23,6 @@ func NewMessage(event events.Event) *Message {
 	return getMessageFromEvent(event)
 }
 
-func getNameplate() string {
-	return serverStyle.Render("Assistant: ")
-}
-
 func getMessageFromEvent(event events.Event) *Message {
 	eventType := event.Type()
 	switch eventType {
@@ -35,7 +31,7 @@ func getMessageFromEvent(event events.Event) *Message {
 		if !ok {
 			return nil
 		}
-		content := getNameplate() + "Run started"
+		content := "Run started"
 		return &Message{
 			contents: []string{content},
 		}
@@ -45,7 +41,7 @@ func getMessageFromEvent(event events.Event) *Message {
 		if !ok {
 			return nil
 		}
-		content := getNameplate() + "Run finished"
+		content := "Run finished"
 		return &Message{
 			contents: []string{content},
 		}
@@ -61,7 +57,7 @@ func getMessageFromEvent(event events.Event) *Message {
 		if !ok {
 			return nil
 		}
-		curMsg := getNameplate() + "text message started"
+		curMsg := "text message started"
 		return &Message{
 			contents: []string{curMsg},
 		}
@@ -71,14 +67,14 @@ func getMessageFromEvent(event events.Event) *Message {
 			return nil
 		}
 		return &Message{
-			contents: []string{getNameplate() + msg.Delta},
+			contents: []string{msg.Delta},
 		}
 	case events.EventTypeTextMessageEnd:
 		_, ok := event.(*events.TextMessageEndEvent)
 		if !ok {
 			return nil
 		}
-		curMsg := getNameplate() + "text message ended"
+		curMsg := "text message ended"
 		return &Message{
 			contents: []string{curMsg},
 		}
@@ -87,7 +83,7 @@ func getMessageFromEvent(event events.Event) *Message {
 		if !ok {
 			return nil
 		}
-		curMsg := getNameplate() + "tool call started"
+		curMsg := "tool call started"
 		return &Message{
 			contents: []string{curMsg},
 		}
@@ -96,7 +92,7 @@ func getMessageFromEvent(event events.Event) *Message {
 		if !ok {
 			return nil
 		}
-		curMsg := fmt.Sprintf("%stool call args: %s", getNameplate(), args.Delta)
+		curMsg := fmt.Sprintf("tool call args: %s", args.Delta)
 		return &Message{
 			contents: []string{curMsg},
 		}
@@ -105,7 +101,7 @@ func getMessageFromEvent(event events.Event) *Message {
 		if !ok {
 			return nil
 		}
-		curMsg := getNameplate() + "tool call ended"
+		curMsg := "tool call ended"
 		return &Message{
 			contents: []string{curMsg},
 		}
@@ -114,7 +110,7 @@ func getMessageFromEvent(event events.Event) *Message {
 		if !ok {
 			return nil
 		}
-		curMsg := getNameplate() + result.Content
+		curMsg := result.Content
 		return &Message{
 			contents: []string{curMsg},
 		}
@@ -130,7 +126,7 @@ func getMessageFromEvent(event events.Event) *Message {
 				fmt.Println("Error marshaling JSON:", err)
 				return nil
 			}
-			contents = append(contents, getNameplate()+string(jsonData))
+			contents = append(contents, string(jsonData))
 
 		}
 		return &Message{
@@ -235,7 +231,7 @@ func getMessageFromEvent(event events.Event) *Message {
 		}
 		fmt.Println(evt)
 		return &Message{
-			contents: []string{getNameplate() + string(jsonData)},
+			contents: []string{string(jsonData)},
 		}
 
 	case events.EventTypeRaw:
