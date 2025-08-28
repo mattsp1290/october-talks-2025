@@ -8,6 +8,7 @@ import (
 
 	"github.com/mattsp1290/october-talks-2025/example/server/internal/mcp"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed data/client_prompt.md
@@ -30,7 +31,35 @@ func TestToolCalls(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	results, err := CallLLM(ctx, languages_prompt, nil)
+	resultChan := make(chan string)
+	g, groupCtx := errgroup.WithContext(ctx)
+	var results []string
+
+	g.Go(func() error {
+		for {
+			select {
+			case result := <-resultChan:
+				if result == "" {
+					return nil
+				}
+				results = append(results, result)
+			case <-groupCtx.Done():
+				return groupCtx.Err()
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		callErr := CallLLM(groupCtx, languages_prompt, nil, resultChan)
+		close(resultChan)
+		return callErr
+	})
+
+	if err = g.Wait(); err != nil {
+		require.NoError(t, err)
+	}
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 }
