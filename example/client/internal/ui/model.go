@@ -1,142 +1,85 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/76creates/stickers/flexbox"
-	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/message"
-	"github.com/mattsp1290/sweetie16/pkg/color"
 )
 
-var (
-	styleBackground    = lipgloss.NewStyle().Align(lipgloss.Center).Background(color.BlackColor)
-	chatStyle          = lipgloss.NewStyle().Align(lipgloss.Left).Background(color.BlackColor)
-	inputStyle         = lipgloss.NewStyle().Align(lipgloss.Left).Background(color.BlackColor)
-	dividerStyle       = lipgloss.NewStyle().Align(lipgloss.Center).Background(color.BlackColor)
-	userNameStyle      = lipgloss.NewStyle().Foreground(color.BlueColor)
-	userInputStyle     = lipgloss.NewStyle().Foreground(color.LightGreyColor)
-	assistantNameStyle = lipgloss.NewStyle().Foreground(color.RedColor)
-	tableRowIndex      = 1
-	tableCellIndex     = 1
-	cellString         = "Hello World"
-)
 
 type UIMessage struct {
-	User      string
+	Role      string
 	Content   string
-	Timestamp string
+	Timestamp time.Time
 }
 
-func NewUIMessage(user, content string) UIMessage {
-	// now
-	timestamp := time.Now().Format("15:04:05")
-	if strings.Contains(user, "You") {
-		content = userInputStyle.Render(content)
-	}
+func NewUIMessage(role, content string) UIMessage {
 	return UIMessage{
-		User:      user,
+		Role:      role,
 		Content:   content,
-		Timestamp: timestamp,
+		Timestamp: time.Now(),
 	}
+}
+
+func (m UIMessage) String() string {
+	var roleStyle lipgloss.Style
+	var rolePrefix string
+	
+	if m.Role == "user" {
+		roleStyle = UserLabelStyle
+		rolePrefix = "You"
+	} else {
+		roleStyle = AssistantLabelStyle
+		rolePrefix = "Assistant"
+	}
+	
+	timestamp := m.Timestamp.Format("15:04")
+	header := fmt.Sprintf("%s %s", roleStyle.Render(rolePrefix), TimestampStyle.Render(timestamp))
+	content := MessageContentStyle.Render(m.Content)
+	
+	return fmt.Sprintf("%s\n%s", header, content)
 }
 
 type Model struct {
-	flexBox   *flexbox.FlexBox
-	table     table.Model
-	chatRow   *flexbox.Row
-	helpRow   *flexbox.Row
-	statusRow *flexbox.Row
-	inputRow  *flexbox.Row
-	messages  []UIMessage
-	textarea  textarea.Model
-	userInput chan string
-	err       error
+	messages       []UIMessage
+	viewport       viewport.Model
+	textarea       textarea.Model
+	userInput      chan string
+	ready          bool
+	waitingForResp bool
+	typingDots     int
 }
 
-func getBox() *flexbox.FlexBox {
-	box := flexbox.New(0, 0).SetStyle(styleBackground)
-	return box
-}
-
-func getChatRow(box *flexbox.FlexBox) *flexbox.Row {
-	return box.NewRow().AddCells(
-		flexbox.NewCell(9, 10).SetStyle(chatStyle),
-		flexbox.NewCell(1, 10).SetStyle(dividerStyle),
-		flexbox.NewCell(3, 10).SetStyle(styleBackground),
-	)
-}
-
-func getInputRow(box *flexbox.FlexBox) *flexbox.Row {
-	return box.NewRow().AddCells(
-		flexbox.NewCell(9, 2).SetStyle(inputStyle),
-		flexbox.NewCell(1, 2).SetStyle(dividerStyle),
-	)
-}
-
-func getStatusBar(box *flexbox.FlexBox) *flexbox.Row {
-	return box.NewRow().AddCells(
-		flexbox.NewCell(1, 1).SetStyle(dividerStyle),
-		flexbox.NewCell(9, 1).SetStyle(styleBackground),
-		flexbox.NewCell(1, 1).SetStyle(dividerStyle),
-	)
-}
-
-func getHelpBar(box *flexbox.FlexBox) *flexbox.Row {
-	return box.NewRow().AddCells(
-		flexbox.NewCell(9, 1).SetStyle(styleBackground),
-		flexbox.NewCell(1, 1).SetStyle(dividerStyle),
-	)
-}
-
-func getTableStyle() table.Styles {
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(color.LightGreyColor).
-		BorderBottom(false).
-		Bold(false)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color(color.LightBlueColor)).
-		Background(lipgloss.Color(color.DarkBlueColor)).
-		Bold(false)
-	return s
-}
-
-func getColumns() []table.Column {
-	return []table.Column{
-		{Title: "Time", Width: 15},
-		{Title: "User", Width: 35},
-		{Title: "Message", Width: 150},
+func (m *Model) updateViewportContent() {
+	if len(m.messages) == 0 {
+		// Show splash screen when no messages
+		m.viewport.SetContent(getSplashScreen(m.viewport.Width, m.viewport.Height))
+		return
 	}
-}
-
-func getRows(messages []UIMessage) []table.Row {
-	var rows []table.Row
-	for _, msg := range messages {
-		rows = append(rows, table.Row{
-			msg.Timestamp,
-			msg.User,
-			msg.Content,
-		})
+	
+	var content strings.Builder
+	for i, msg := range m.messages {
+		if i > 0 {
+			content.WriteString("\n\n")
+		}
+		content.WriteString(msg.String())
 	}
-	return rows
-}
-
-func getTable(rows []table.Row) table.Model {
-	t := table.New(
-		table.WithColumns(getColumns()),
-		table.WithRows(rows),
-		table.WithFocused(true),
-		table.WithWidth(250),
-	)
-	t.SetStyles(getTableStyle())
-
-	return t
+	
+	// Add typing indicator if waiting for response
+	if m.waitingForResp {
+		content.WriteString("\n\n")
+		content.WriteString(getTypingIndicator(m.typingDots))
+	}
+	
+	m.viewport.SetContent(content.String())
+	m.viewport.GotoBottom()
 }
 
 func getTextarea() textarea.Model {
@@ -144,108 +87,192 @@ func getTextarea() textarea.Model {
 	ta.Placeholder = "Send a message..."
 	ta.Focus()
 
-	ta.Prompt = "┃ "
-	ta.CharLimit = 280
+	ta.Prompt = "│ "
+	ta.CharLimit = 2000
 
-	ta.SetWidth(30)
+	ta.SetWidth(80)
 	ta.SetHeight(3)
 
-	// Remove cursor line styling
-	ta.FocusedStyle.CursorLine = inputStyle
-	ta.FocusedStyle.Text = inputStyle
-	ta.BlurredStyle.Text = inputStyle
+	// Style the textarea
+	ta.FocusedStyle.Base = lipgloss.NewStyle()
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.FocusedStyle.Placeholder = InputPlaceholderStyle
+	ta.FocusedStyle.Text = InputTextStyle
+	ta.FocusedStyle.Prompt = InputPromptStyle
+	ta.BlurredStyle = ta.FocusedStyle
 
 	ta.ShowLineNumbers = false
 	return ta
 }
 
 func InitialModel(userInput chan string) *Model {
-	box := getBox()
-	chatRow := getChatRow(box)
-	textareaRow := getInputRow(box)
-	statusRow := getStatusBar(box)
-	helpRow := getHelpBar(box)
-	rows := []*flexbox.Row{chatRow, textareaRow, statusRow, helpRow}
-
-	box.AddRows(rows)
+	vp := viewport.New(80, 20)
+	vp.KeyMap = viewport.KeyMap{
+		Up:       key.NewBinding(key.WithKeys("up", "k")),
+		Down:     key.NewBinding(key.WithKeys("down", "j")),
+		PageDown: key.NewBinding(key.WithKeys("pgdown")),
+		PageUp:   key.NewBinding(key.WithKeys("pgup")),
+	}
 
 	return &Model{
-		flexBox:   box,
-		table:     getTable(nil),
-		userInput: userInput,
-		chatRow:   chatRow,
-		helpRow:   helpRow,
-		statusRow: statusRow,
-		inputRow:  textareaRow,
+		viewport:  vp,
 		textarea:  getTextarea(),
+		userInput: userInput,
+		messages:  []UIMessage{},
 	}
 }
 
 func (m *Model) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(textarea.Blink, tea.EnterAltScreen, tickCmd())
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		tiCmd tea.Cmd
+		vpCmd tea.Cmd
 	)
 
 	m.textarea, tiCmd = m.textarea.Update(msg)
+	m.viewport, vpCmd = m.viewport.Update(msg)
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		windowHeight := msg.Height
-		windowWidth := msg.Width
-		m.flexBox.SetWidth(windowWidth)
-		m.flexBox.SetHeight(windowHeight)
-		m.table.SetWidth(windowWidth)
-		m.table.SetHeight(windowHeight)
+		headerHeight := 2
+		footHeight := lipgloss.Height(m.textareaView()) + 1
+		verticalMarginHeight := headerHeight + footHeight
+
+		if !m.ready {
+			// Since this program is using the full size of the viewport we
+			// need to wait until we've received the window dimensions before
+			// we can initialize the viewport. The initial dimensions come in
+			// quickly, though asynchronously, which is why we wait for them
+			// here.
+			m.viewport = viewport.New(msg.Width-4, msg.Height-verticalMarginHeight-2)
+			m.viewport.KeyMap = viewport.KeyMap{
+				Up:       key.NewBinding(key.WithKeys("up", "k")),
+				Down:     key.NewBinding(key.WithKeys("down", "j")),
+				PageDown: key.NewBinding(key.WithKeys("pgdown")),
+				PageUp:   key.NewBinding(key.WithKeys("pgup")),
+			}
+			m.updateViewportContent()
+			m.textarea.SetWidth(msg.Width - 4)
+			m.ready = true
+		} else {
+			m.viewport.Width = msg.Width - 4
+			m.viewport.Height = msg.Height - verticalMarginHeight - 2
+			m.textarea.SetWidth(msg.Width - 4)
+		}
+
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyCtrlC:
 			return m, tea.Quit
+		case tea.KeyEsc:
+			if m.textarea.Focused() {
+				m.textarea.Blur()
+				m.viewport.YOffset = 0
+			}
 		case tea.KeyEnter:
-			m.userInput <- m.textarea.Value()
+			if m.textarea.Focused() && m.textarea.Value() != "" && !m.waitingForResp {
+				// Send the message
+				m.userInput <- m.textarea.Value()
 
-			uiMsg := NewUIMessage(inputStyle.Render("You"), m.textarea.Value())
-			m.messages = append(m.messages, uiMsg)
-			//m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
-			m.textarea.Reset()
-			//m.viewport.GotoBottom()
+				// Add to messages
+				uiMsg := NewUIMessage("user", m.textarea.Value())
+				m.messages = append(m.messages, uiMsg)
+				m.updateViewportContent()
+				m.textarea.Reset()
+				m.waitingForResp = true
+			}
+		default:
+			if !m.textarea.Focused() {
+				switch msg.String() {
+				case "i", "a":
+					// Enter input mode
+					m.textarea.Focus()
+					return m, textarea.Blink
+				}
+			}
 		}
+
 	case *message.Message:
+		m.waitingForResp = false
 		for _, currMsg := range msg.Strings() {
-			uiMsg := NewUIMessage(assistantNameStyle.Render("Assistant"), currMsg)
+			uiMsg := NewUIMessage("assistant", currMsg)
 			m.messages = append(m.messages, uiMsg)
 		}
+		m.updateViewportContent()
+	
+	case tickMsg:
+		m.typingDots++
+		if m.waitingForResp {
+			m.updateViewportContent()
+		}
+		return m, tickCmd()
 
-	// We handle errors just like any other message
-	case errMsg:
-		m.err = msg
-		return m, nil
 	}
 
-	return m, tea.Batch(tiCmd)
+	return m, tea.Batch(tiCmd, vpCmd)
+}
+
+func (m *Model) textareaView() string {
+	return InputContainerStyle.Render(m.textarea.View())
 }
 
 func (m *Model) View() string {
-	m.flexBox.ForceRecalculate()
-	var cell *flexbox.Cell
-	if m.chatRow != nil {
-		cell = m.chatRow.GetCell(0)
+	if !m.ready {
+		initMsg := lipgloss.NewStyle().
+			Foreground(primaryColor).
+			Bold(true).
+			Render("\n  ✨ Initializing chat...")
+		return initMsg
 	}
 
-	if m.chatRow != nil && cell != nil {
-		tbl := getTable(getRows(m.messages))
-		m.table = tbl
-		m.table.SetWidth(cell.GetWidth())
-		m.table.SetHeight(cell.GetHeight())
-		cell.SetContent(m.table.View())
+	// Header with message count
+	msgCount := ""
+	if len(m.messages) > 0 {
+		msgCount = TimestampStyle.Render(fmt.Sprintf(" (%d messages)", len(m.messages)))
+	}
+	header := HeaderStyle.Render("💬 Chat" + msgCount)
+
+	// Viewport with scroll indicator
+	viewportView := ViewportStyle.
+		Width(m.viewport.Width + 2).
+		Height(m.viewport.Height + 2).
+		Render(m.viewport.View())
+
+	// Add scroll percentage if there are messages
+	if len(m.messages) > 0 && m.viewport.TotalLineCount() > m.viewport.Height {
+		percent := float64(m.viewport.YOffset) / float64(m.viewport.TotalLineCount()-m.viewport.Height) * 100
+		if percent < 0 {
+			percent = 0
+		}
+		if percent > 100 {
+			percent = 100
+		}
+		scrollInfo := TimestampStyle.Render(fmt.Sprintf(" %.0f%% ", percent))
+		viewportView = lipgloss.JoinHorizontal(lipgloss.Top, viewportView, scrollInfo)
 	}
 
-	if m.inputRow != nil {
-		m.inputRow.GetCell(0).SetContent(m.textarea.View())
+	inputView := m.textareaView()
+
+	// Build help text with styled keys
+	helpItems := []string{
+		HelpKeyStyle.Render("i/a") + " " + HelpDescStyle.Render("input mode"),
+		HelpKeyStyle.Render("Esc") + " " + HelpDescStyle.Render("normal mode"),
+		HelpKeyStyle.Render("Enter") + " " + HelpDescStyle.Render("send"),
+		HelpKeyStyle.Render("Ctrl+C") + " " + HelpDescStyle.Render("quit"),
+	}
+	help := HelpStyle.Render(strings.Join(helpItems, " • "))
+
+	// Add input mode indicator
+	if m.textarea.Focused() {
+		inputMode := lipgloss.NewStyle().
+			Foreground(accentColor).
+			Bold(true).
+			Render(" [INPUT MODE]")
+		header += inputMode
 	}
 
-	return m.flexBox.Render()
+	return fmt.Sprintf("%s\n\n%s\n\n%s\n%s", header, viewportView, inputView, help)
 }

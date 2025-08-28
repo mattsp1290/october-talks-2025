@@ -3,7 +3,6 @@ package message
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattsp1290/ag-ui/go-sdk/pkg/core/events"
@@ -46,12 +45,17 @@ func getMessageFromEvent(event events.Event) *Message {
 			contents: []string{content},
 		}
 	case events.EventTypeRunError:
-		_, ok := event.(*events.RunErrorEvent)
+		errorEvent, ok := event.(*events.RunErrorEvent)
 		if !ok {
 			return nil
 		}
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		content := fmt.Sprintf("Run error: %s", errorEvent.Message)
+		if errorEvent.Code != nil {
+			content = fmt.Sprintf("Run error [%s]: %s", *errorEvent.Code, errorEvent.Message)
+		}
+		return &Message{
+			contents: []string{content},
+		}
 	case events.EventTypeTextMessageStart:
 		_, ok := event.(*events.TextMessageStartEvent)
 		if !ok {
@@ -167,57 +171,72 @@ func getMessageFromEvent(event events.Event) *Message {
 			contents: contents,
 		}
 	case events.EventTypeStepStarted:
-		_, ok := event.(*events.StepStartedEvent)
+		stepEvent, ok := event.(*events.StepStartedEvent)
 		if !ok {
 			return nil
 		}
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		content := fmt.Sprintf("Step started: %s", stepEvent.StepName)
+		return &Message{
+			contents: []string{content},
+		}
 
 	case events.EventTypeStepFinished:
-		_, ok := event.(*events.StepFinishedEvent)
+		stepEvent, ok := event.(*events.StepFinishedEvent)
 		if !ok {
 			return nil
 		}
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		content := fmt.Sprintf("Step finished: %s", stepEvent.StepName)
+		return &Message{
+			contents: []string{content},
+		}
 	case events.EventTypeThinkingStart:
-		_, ok := event.(*events.ThinkingStartEvent)
+		thinkingEvent, ok := event.(*events.ThinkingStartEvent)
 		if !ok {
 			return nil
 		}
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		content := "Thinking started"
+		if thinkingEvent.Title != nil {
+			content = fmt.Sprintf("Thinking started: %s", *thinkingEvent.Title)
+		}
+		return &Message{
+			contents: []string{content},
+		}
 	case events.EventTypeThinkingEnd:
 		_, ok := event.(*events.ThinkingEndEvent)
 		if !ok {
 			return nil
 		}
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		content := "Thinking ended"
+		return &Message{
+			contents: []string{content},
+		}
 	case events.EventTypeThinkingTextMessageStart:
-		txtMsg, ok := event.(*events.ThinkingTextMessageStartEvent)
+		_, ok := event.(*events.ThinkingTextMessageStartEvent)
 		if !ok {
 			return nil
 		}
-		fmt.Println(txtMsg)
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		content := "Thinking message started"
+		return &Message{
+			contents: []string{content},
+		}
 	case events.EventTypeThinkingTextMessageContent:
-		_, ok := event.(*events.ThinkingTextMessageContentEvent)
+		msg, ok := event.(*events.ThinkingTextMessageContentEvent)
 		if !ok {
 			return nil
 		}
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		return &Message{
+			contents: []string{msg.Delta},
+		}
 
 	case events.EventTypeThinkingTextMessageEnd:
 		_, ok := event.(*events.ThinkingTextMessageEndEvent)
 		if !ok {
 			return nil
 		}
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		content := "Thinking message ended"
+		return &Message{
+			contents: []string{content},
+		}
 
 	case events.EventTypeCustom:
 		evt, ok := event.(*events.CustomEvent)
@@ -235,16 +254,22 @@ func getMessageFromEvent(event events.Event) *Message {
 		}
 
 	case events.EventTypeRaw:
-		_, ok := event.(*events.RawEvent)
+		rawEvent, ok := event.(*events.RawEvent)
 		if !ok {
 			return nil
 		}
-		log.Fatalf("Event type: %s is not yet supported. \n", eventType)
-		return &Message{}
+		jsonData, err := json.Marshal(rawEvent.Event)
+		if err != nil {
+			fmt.Println("Error marshaling raw event:", err)
+			return nil
+		}
+		return &Message{
+			contents: []string{string(jsonData)},
+		}
 
 	default:
-		// For any other event types, return a raw event
-		log.Fatalf("Unknown event type: %s", eventType)
+		// For any other event types, return nil
+		fmt.Printf("Unhandled event type: %s\n", eventType)
 		return nil
 	}
 }
