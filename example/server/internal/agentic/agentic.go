@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	"github.com/mattsp1290/ag-ui/go-sdk/pkg/core/events"
 	"github.com/mattsp1290/october-talks-2025/example/server/internal/mcp"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
@@ -53,7 +54,14 @@ func CallLLM(ctx context.Context, input string, tools []langchaingoTools.Tool, r
 		return fmt.Errorf("run chain: %w", err)
 	}
 	output := result["output"].(string)
-	returnChan <- output
+	
+	// Create a proper event for the final output
+	messageID := events.GenerateMessageID()
+	finalMessage := events.NewTextMessageContentEvent(messageID, output)
+	if jsonData, err := finalMessage.ToJSON(); err == nil {
+		returnChan <- string(jsonData)
+	}
+	
 	return nil
 }
 
@@ -68,6 +76,9 @@ func ProcessInput(ctx context.Context, w *bufio.Writer, sseWriter *sse.SSEWriter
 				if result == "" {
 					return nil
 				}
+				
+				// All messages from the handler should now be proper JSON events
+				// WriteBytes will format them as SSE frames with "data: " prefix
 				if err := sseWriter.WriteBytes(ctx, w, []byte(result)); err != nil {
 					return fmt.Errorf("failed to write event: %w", err)
 				}
