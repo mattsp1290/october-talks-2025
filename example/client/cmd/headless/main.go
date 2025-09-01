@@ -1,5 +1,7 @@
 package main
 
+// Useful for quickly testing the client
+
 import (
 	"context"
 	"fmt"

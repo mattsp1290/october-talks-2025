@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mattsp1290/ag-ui/go-sdk/pkg/core/events"
 )
 
 var serverStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("21"))

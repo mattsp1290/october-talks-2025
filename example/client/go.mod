@@ -3,13 +3,13 @@ module github.com/mattsp1290/october-talks-2025/example/client
 go 1.24.4
 
 // Use local go-sdk packages during development
-replace github.com/mattsp1290/ag-ui/go-sdk => /Users/punk1290/git/ag-ui/go-sdk
+replace github.com/ag-ui-protocol/ag-ui/sdks/community/go => /Users/punk1290/git/ag-ui/sdks/community/go
 
 require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/mattsp1290/ag-ui/go-sdk v0.0.0-20250816203601-e173ef3a0e9a
+	github.com/ag-ui-protocol/ag-ui/sdks/community/go v0.0.0-20250816203601-e173ef3a0e9a
 	github.com/sirupsen/logrus v1.9.3
 )
 

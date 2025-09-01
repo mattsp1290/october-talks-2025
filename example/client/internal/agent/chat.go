@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mattsp1290/ag-ui/go-sdk/pkg/client/sse"
+	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/client/sse"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/event"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/message"
 	"github.com/sirupsen/logrus"
@@ -24,7 +24,7 @@ func Chat(ctx context.Context, inputMsg string, endpoint string, send func(msg *
 		ConnectTimeout: 30 * time.Second,
 		ReadTimeout:    5 * time.Minute,
 		BufferSize:     100,
-		Logger:         nil,
+		Logger:         logger,
 		AuthHeader:     "Authorization",
 		AuthScheme:     "Bearer",
 	}
@@ -48,7 +48,7 @@ func Chat(ctx context.Context, inputMsg string, endpoint string, send func(msg *
 				"content": inputMsg,
 			},
 		},
-		"tools":          []interface{}{}, // Request tool discovery
+		"tools":          []interface{}{},
 		"context":        []interface{}{},
 		"forwardedProps": map[string]interface{}{},
 	}
@@ -81,7 +81,6 @@ func Chat(ctx context.Context, inputMsg string, endpoint string, send func(msg *
 				return fmt.Errorf("failed to parse message %w", err)
 			}
 			send(currMsg)
-			//p.Send(currMsg)
 
 		case err, ok := <-errorCh:
 			if !ok {
