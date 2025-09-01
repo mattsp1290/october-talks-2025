@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
+	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/encoding/sse"
 	"github.com/gofiber/fiber/v3"
-	"github.com/mattsp1290/ag-ui/go-sdk/pkg/core/events"
-	"github.com/mattsp1290/ag-ui/go-sdk/pkg/encoding/sse"
 	"github.com/mattsp1290/october-talks-2025/example/server/internal/agentic"
 	"github.com/mattsp1290/october-talks-2025/example/server/internal/config"
 )
