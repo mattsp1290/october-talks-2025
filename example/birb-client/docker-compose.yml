@@ -13,7 +13,7 @@ services:
       # Log level (debug, info, warn, error)
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Datadog
-      DD_AGENT_HOST: 172.17.0.1
+      DD_AGENT_HOST: 172.19.0.1
     restart: unless-stopped
     networks:
       - birb-net
