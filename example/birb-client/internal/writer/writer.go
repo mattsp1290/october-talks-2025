@@ -3,6 +3,7 @@ package writer
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,11 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// CacheValue represents the structure to be stored in the cache
+type CacheValue struct {
+	ID string `json:"id"`
+}
 
 // Writer handles writing random UUID key-value pairs to birb-nest
 type Writer struct {
@@ -102,20 +108,28 @@ func (w *Writer) writeRandomUUID(ctx context.Context) error {
 	// Generate random UUID for key
 	key := uuid.New().String()
 
-	// Generate random UUID for value (store as plain string)
-	value := uuid.New().String()
+	// Generate random UUID for value and create CacheValue struct
+	cacheValue := CacheValue{
+		ID: uuid.New().String(),
+	}
+
+	// Marshal to JSON
+	jsonData, err := json.Marshal(cacheValue)
+	if err != nil {
+		return fmt.Errorf("failed to marshal cache value: %w", err)
+	}
 
 	// Write to birb-nest using POST /v1/cache/:key
 	url := fmt.Sprintf("%s/v1/cache/%s", w.baseURL, key)
-	log.Printf("Writing: key=%s value=%s", key, value)
+	log.Printf("Writing: key=%s value=%s", key, string(jsonData))
 
-	// Create request with value as body
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBufferString(value))
+	// Create request with JSON as body
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
 	resp, err := w.httpClient.Do(req)
