@@ -12,6 +12,8 @@ services:
       WRITE_INTERVAL: ${WRITE_INTERVAL:-3}
       # Log level (debug, info, warn, error)
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Datadog
+      DD_AGENT_HOST: dd-agent
     restart: unless-stopped
     networks:
       - birb-net
