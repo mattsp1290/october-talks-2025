@@ -13,7 +13,7 @@ services:
       # Log level (debug, info, warn, error)
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Datadog
-      DD_AGENT_HOST: docker.host.internal
+      DD_AGENT_HOST: host.docker.internal
     restart: unless-stopped
     networks:
       - birb-net
