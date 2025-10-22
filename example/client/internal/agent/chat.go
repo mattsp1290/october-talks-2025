@@ -68,6 +68,8 @@ func Chat(ctx context.Context, inputMsg string, endpoint string, emit func(event
 	// Parse SSE events
 	for {
 		select {
+		case <-ctx.Done():
+			break
 		case frame, ok := <-frames:
 			if !ok {
 				return nil
@@ -86,9 +88,6 @@ func Chat(ctx context.Context, inputMsg string, endpoint string, emit func(event
 			if err != nil {
 				break
 			}
-
-		case <-ctx.Done():
-			break
 		}
 	}
 }

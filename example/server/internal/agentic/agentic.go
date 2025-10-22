@@ -5,64 +5,23 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"log"
+	"os/exec"
 
 	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
+	"github.com/firebase/genkit/go/plugins/mcp"
+	mcp_golang "github.com/metoro-io/mcp-golang"
+	"github.com/metoro-io/mcp-golang/transport/stdio"
 	"golang.org/x/sync/errgroup"
 
 	aguigenkit "github.com/ag-ui-protocol/ag-ui/integrations/community/genkit/go/genkit"
 	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/encoding/sse"
 )
 
-// reminder is a reminder for the AI to output in our expected format.
-//
-//go:embed data/reminder.md
-var reminder string
-
-//func CallLLM(ctx context.Context, input string, tools []langchaingoTools.Tool, returnChan chan<- string) error {
-//
-//	adapter, err := internalmcp.NewAdapter(fmt.Sprintf("http://127.0.0.1:%d/mcp", internalmcp.DefaultPort))
-//
-//	if err != nil {
-//		return fmt.Errorf("new mcp adapter: %w", err)
-//	}
-//
-//	_, err = adapter.Tools()
-//	if err != nil {
-//		return fmt.Errorf("append tools: %w", err)
-//	}
-//
-//	llm, err := tmcanthropic.New(tmcanthropic.WithModel("claude-3-haiku-20240307"))
-//	if err != nil {
-//		return fmt.Errorf("failed to create LLM client: %w", err)
-//	}
-//
-//	agent := agents.NewOneShotAgent(llm,
-//		tools,
-//		agents.WithMaxIterations(50))
-//
-//	executor := agents.NewExecutor(agent, agents.WithCallbacksHandler(NewHandler(returnChan)))
-//
-//	inputMap := make(map[string]any)
-//	inputMap["input"] = input + "\n" + reminder
-//
-//	result, err := chains.Call(ctx, executor, inputMap)
-//	if err != nil {
-//		return fmt.Errorf("run chain: %w", err)
-//	}
-//	output := result["output"].(string)
-//
-//	// Create a proper event for the final output
-//	messageID := events.GenerateMessageID()
-//	finalMessage := events.NewTextMessageContentEvent(messageID, output)
-//	if jsonData, err := finalMessage.ToJSON(); err == nil {
-//		returnChan <- string(jsonData)
-//	}
-//
-//	return nil
-//}
+const mcpPath = "/Users/punk1290/git/october-talks-2025/example/mcp/mcp"
 
 func ProcessInput(ctx context.Context, w *bufio.Writer, sseWriter *sse.SSEWriter, input string) error {
 	resultChan := make(chan events.Event)
@@ -98,6 +57,41 @@ func ProcessInput(ctx context.Context, w *bufio.Writer, sseWriter *sse.SSEWriter
 	return g.Wait()
 }
 
+func getPrompt(input string) (string, error) {
+	// Start the server process
+	cmd := exec.Command(mcpPath)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		log.Fatalf("Failed to get stdin pipe: %v", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatalf("Failed to get stdout pipe: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+	defer cmd.Process.Kill()
+
+	clientTransport := stdio.NewStdioServerTransportWithIO(stdout, stdin)
+	client := mcp_golang.NewClient(clientTransport)
+
+	if _, err := client.Initialize(context.Background()); err != nil {
+		log.Fatalf("Failed to initialize client: %v", err)
+	}
+
+	// List available tools
+	prompt, err := client.GetPrompt(context.Background(), "create_pr", map[string]string{"repo": input})
+	if err != nil {
+		return "", err
+	}
+	if len(prompt.Messages) == 0 {
+		return "", fmt.Errorf("no prompt found")
+	}
+	return prompt.Messages[0].Content.TextContent.Text, nil
+}
+
 func CallLLM(ctx context.Context, input string, returnChan chan<- events.Event) error {
 	g := genkit.Init(
 		ctx,
@@ -105,10 +99,43 @@ func CallLLM(ctx context.Context, input string, returnChan chan<- events.Event) 
 		genkit.WithPlugins(&googlegenai.GoogleAI{}),
 	)
 
+	mcpClient, err := mcp.NewGenkitMCPClient(mcp.MCPClientOptions{
+		Name: "localMcp",
+		Stdio: &mcp.StdioConfig{
+			Command: mcpPath,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	mcpTools, err := mcpClient.GetActiveTools(ctx, g)
+	if err != nil {
+		return err
+	}
+
+	tools := make([]ai.ToolRef, len(mcpTools))
+	for i, tool := range mcpTools {
+		tools[i] = tool
+	}
+
+	prompt, err := getPrompt(input)
+	if err != nil {
+		return err
+	}
+
 	streamingFunc := aguigenkit.StreamingFunc("", "", returnChan)
 
-	_, err := genkit.Generate(ctx, g,
-		ai.WithPrompt(input),
+	_, err = genkit.Generate(ctx, g,
+		ai.WithPrompt(prompt),
+		ai.WithTools(tools...),
+		ai.WithMaxTurns(1000),
 		ai.WithStreaming(streamingFunc))
+	if err != nil {
+		returnChan <- events.NewTextMessageContentEvent("", fmt.Sprintf("Error: %v", err))
+	} else {
+		returnChan <- events.NewTextMessageContentEvent("", "finished processing.")
+	}
+	returnChan <- events.NewRunFinishedEvent("", "")
 	return err
 }

@@ -3,13 +3,15 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"text/template"
 
 	mcp "github.com/metoro-io/mcp-golang"
-	"github.com/metoro-io/mcp-golang/transport/http"
+	"github.com/metoro-io/mcp-golang/transport/stdio"
 )
 
 //go:embed data/pr_review.md
@@ -37,8 +39,16 @@ type ReadFileArguments struct {
 }
 
 type ExecCommandArguments struct {
-	Command string   `json:"command" jsonschema:"required,description=Command to execute"`
-	Args    []string `json:"args" jsonschema:"description=Arguments to pass to the command"`
+	Command    string   `json:"command" jsonschema:"required,description=Command to execute"`
+	Args       []string `json:"args" jsonschema:"description=Arguments to pass to the command"`
+	WorkingDir string   `json:"working_dir" jsonschema:"description=Working directory to execute the command in"`
+}
+
+type ExecCommandResponse struct {
+	Output     string   `json:"output" jsonschema:"required,description=Output of the command"`
+	Command    string   `json:"command" jsonschema:"required,description=Command that was executed"`
+	Args       []string `json:"args" jsonschema:"required,description=Arguments that were passed to the command"`
+	WorkingDir string   `json:"working_dir" jsonschema:"required,description=Working directory that the command was executed in"`
 }
 
 type PRArguments struct {
@@ -78,22 +88,30 @@ func appendFile(path, content string) (string, error) {
 	return readFile(path)
 }
 
-func execCommand(command string, args []string) (string, error) {
+func execCommand(workingDir, command string, args []string) (*ExecCommandResponse, error) {
 	cmd := exec.Command(command, args...)
+	cmd.Dir = workingDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		return &ExecCommandResponse{
+			Output:     fmt.Sprintf("Error: %s\nOutput: %s", err.Error(), string(output)),
+			Command:    command,
+			Args:       args,
+			WorkingDir: workingDir,
+		}, nil
 	}
-	return string(output), nil
+	return &ExecCommandResponse{
+		Output:     string(output),
+		Command:    command,
+		Args:       args,
+		WorkingDir: workingDir,
+	}, nil
 }
 
 func main() {
 	done := make(chan struct{})
 
-	transport := http.NewHTTPTransport("/mcp")
-	transport.WithAddr(":8080")
-
-	server := mcp.NewServer(transport)
+	server := mcp.NewServer(stdio.NewStdioServerTransport())
 	err := server.RegisterTool("append_file", "Append content to a file, creates the file if doesn't exist. Returns the final contents of the file.", func(arguments AppendFileArguments) (*mcp.ToolResponse, error) {
 		content, err := appendFile(arguments.Path, arguments.Text)
 		if err != nil {
@@ -106,11 +124,15 @@ func main() {
 	}
 
 	err = server.RegisterTool("exec_command", "Execute a command and return the output.", func(arguments ExecCommandArguments) (*mcp.ToolResponse, error) {
-		content, err := execCommand(arguments.Command, arguments.Args)
+		results, err := execCommand(arguments.WorkingDir, arguments.Command, arguments.Args)
 		if err != nil {
 			return nil, err
 		}
-		return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+		content, err := json.Marshal(results)
+		if err != nil {
+			return nil, err
+		}
+		return mcp.NewToolResponse(mcp.NewTextContent(string(content))), nil
 	})
 	if err != nil {
 		panic(err)
