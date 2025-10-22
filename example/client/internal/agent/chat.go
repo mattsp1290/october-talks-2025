@@ -2,13 +2,13 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/client/sse"
+	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
 	"github.com/mattsp1290/october-talks-2025/example/client/internal/event"
-	"github.com/mattsp1290/october-talks-2025/example/client/internal/message"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,7 +16,7 @@ func DefaultEndpoint() string {
 	return "http://localhost:8000/agentic"
 }
 
-func Chat(ctx context.Context, inputMsg string, endpoint string, send func(msg *message.Message)) error {
+func Chat(ctx context.Context, inputMsg string, endpoint string, emit func(event events.Event)) error {
 	logger := logrus.New()
 	logger.SetLevel(logrus.FatalLevel)
 	sseConfig := sse.Config{
@@ -61,7 +61,8 @@ func Chat(ctx context.Context, inputMsg string, endpoint string, send func(msg *
 	})
 
 	if err != nil {
-		return errors.New("Failed to establish SSE connection")
+		log.Fatal(err)
+		//return errors.New("Failed to establish SSE connection")
 	}
 
 	// Parse SSE events
@@ -76,11 +77,7 @@ func Chat(ctx context.Context, inputMsg string, endpoint string, send func(msg *
 			if err != nil {
 				return fmt.Errorf("failed to process SSE event %w", err)
 			}
-			currMsg := message.NewMessage(rawEvent)
-			if currMsg == nil {
-				return fmt.Errorf("failed to parse message %w", err)
-			}
-			send(currMsg)
+			emit(rawEvent)
 
 		case err, ok := <-errorCh:
 			if !ok {

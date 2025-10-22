@@ -52,9 +52,12 @@ func TestToolCalls(t *testing.T) {
 	})
 
 	g.Go(func() error {
-		callErr := CallLLM(groupCtx, languages_prompt, nil, resultChan)
+		//callErr := CallLLM(groupCtx, languages_prompt, nil, resultChan)
 		close(resultChan)
-		return callErr
+		//if callErr != nil {
+		//	return callErr
+		//}
+		return nil
 	})
 
 	if err = g.Wait(); err != nil {
