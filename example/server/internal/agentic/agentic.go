@@ -13,8 +13,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	aguigenkit "github.com/ag-ui-protocol/ag-ui/integrations/community/genkit/go/genkit"
-	"github.com/firebase/genkit/go/plugins/mcp"
-
 	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/encoding/sse"
 )
 
@@ -101,29 +99,6 @@ func ProcessInput(ctx context.Context, w *bufio.Writer, sseWriter *sse.SSEWriter
 }
 
 func CallLLM(ctx context.Context, input string, returnChan chan<- events.Event) error {
-	// Initialize Anthropic plugin
-
-	//
-	//g := genkit.Init(
-	//	ctx,
-	//	genkit.WithDefaultModel("anthropic/claude-3-5-haiku-20241022"),
-	//	genkit.WithPlugins(&anthropic.Anthropic{
-	//		Opts: []option.RequestOption{
-	//			option.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
-	//		},
-	//	}),
-	//)
-	mcpClient, err := mcp.NewGenkitMCPClient(mcp.MCPClientOptions{
-		Name: "everything-server",
-		Stdio: &mcp.StdioConfig{
-			Command: "npx",
-			Args:    []string{"-y", "@modelcontextprotocol/server-everything"},
-		},
-	})
-	if err != nil {
-		return err
-	}
-
 	g := genkit.Init(
 		ctx,
 		genkit.WithDefaultModel("googleai/gemini-2.5-flash"),
@@ -132,23 +107,8 @@ func CallLLM(ctx context.Context, input string, returnChan chan<- events.Event) 
 
 	streamingFunc := aguigenkit.StreamingFunc("", "", returnChan)
 
-	mcpTools, err := mcpClient.GetActiveTools(ctx, g)
-	if err != nil {
-		return err
-	}
-
-	if len(mcpTools) == 0 {
-		return fmt.Errorf("no tools found")
-	}
-
-	//tools := make([]ai.ToolRef, len(mcpTools))
-	//for i, tool := range mcpTools {
-	//	tools[i] = tool
-	//}
-	var tools []ai.ToolRef
-	_, err = genkit.Generate(ctx, g,
+	_, err := genkit.Generate(ctx, g,
 		ai.WithPrompt(input),
-		ai.WithTools(tools...),
 		ai.WithStreaming(streamingFunc))
 	return err
 }
