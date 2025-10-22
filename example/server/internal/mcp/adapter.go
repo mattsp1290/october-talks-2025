@@ -21,7 +21,6 @@ func NewAdapter(endpoint string) (*Adapter, error) {
 		return nil, err
 	}
 	mcpClient := client.NewClient(httpTransport)
-	mcpClient.List
 
 	adapter, err := mcpadapter.New(mcpClient, mcpadapter.WithToolTimeout(30*time.Second))
 	if err != nil {
