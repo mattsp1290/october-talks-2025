@@ -37,13 +37,10 @@ func main() {
 		}
 	}()
 
-	eg.Go(func() error {
-		return agent.Chat(groupCtx, "Tell me about why GenKit is awesome", agent.DefaultEndpoint(), emit)
-	})
+	prompt := "/Users/punk1290/git/october-talks-2025/example/birb-client"
 
 	eg.Go(func() error {
-		_, teaErr := p.Run()
-		return teaErr
+		return agent.Chat(groupCtx, prompt, agent.DefaultEndpoint(), emit)
 	})
 
 	err := eg.Wait()
@@ -80,6 +77,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case events.Event:
 		event := events.Event(msg)
+		if event.Type() == events.EventTypeRunFinished {
+			return m, tea.Quit
+		}
 		m.processEvent(event)
 		return m, nil
 	case spinner.TickMsg:
@@ -128,14 +128,6 @@ func (m *model) processEvent(event events.Event) {
 		currID := uuid.New().String()
 		m.order = append(m.order, currID)
 		m.messages[currID] = "Run started"
-	case events.EventTypeRunFinished:
-		_, ok := event.(*events.RunFinishedEvent)
-		if !ok {
-			log.Fatal("RunFinished event not valid\n")
-		}
-		currID := uuid.New().String()
-		m.order = append(m.order, currID)
-		m.messages[currID] = "Run ended"
 	case events.EventTypeTextMessageStart:
 		_, ok := event.(*events.TextMessageStartEvent)
 		if !ok {
@@ -156,6 +148,26 @@ func (m *model) processEvent(event events.Event) {
 
 		currID := m.order[len(m.order)-1]
 		m.messages[currID] = m.messages[currID] + content
+	case events.EventTypeToolCallResult:
+		res, ok := event.(*events.ToolCallResultEvent)
+		if !ok {
+			log.Fatal("ToolCallResult event not valid\n")
+		}
+		currID := uuid.New().String()
+		m.order = append(m.order, currID)
+		m.messages[currID] = res.Content
+	case events.EventTypeTextMessageContent:
+		content, ok := event.(*events.TextMessageContentEvent)
+		if !ok {
+			log.Fatal("TextMessageContent event not valid\n")
+		}
+		currID := uuid.New().String()
+		m.order = append(m.order, currID)
+		m.messages[currID] = content.Delta
+	case events.EventTypeTextMessageEnd:
+		_, ok := event.(*events.TextMessageEndEvent)
+		if !ok {
+		}
 	default:
 		// For any unknown event types, hard fail
 		log.Fatalf("Unhandled event type: %s\n", eventType)

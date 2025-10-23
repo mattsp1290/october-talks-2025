@@ -3,43 +3,24 @@ package agentic
 import (
 	"context"
 	_ "embed"
-	"os"
 	"testing"
 
-	"github.com/mattsp1290/october-talks-2025/example/server/internal/mcp"
+	"github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 )
 
-//go:embed data/client_prompt.md
-var client_prompt string
-
-//go:embed data/languages_prompt.md
-var languages_prompt string
-
 func TestToolCalls(t *testing.T) {
-	if os.Getenv("RUN_INTEGRATION_TESTS") != "true" {
-		t.Skip("Skipping integration test")
-	}
-	mcpServer, err := mcp.NewServer(mcp.DefaultPort)
-	require.NoError(t, err)
-	go func() {
-		mcpErr := mcpServer.Start()
-		if mcpErr != nil {
-			require.NoError(t, mcpErr)
-		}
-	}()
-
 	ctx := context.Background()
-	resultChan := make(chan string)
+	resultChan := make(chan events.Event)
 	g, groupCtx := errgroup.WithContext(ctx)
-	var results []string
+	var results []events.Event
 
 	g.Go(func() error {
 		for {
 			select {
 			case result := <-resultChan:
-				if result == "" {
+				if result == nil {
 					return nil
 				}
 				results = append(results, result)
@@ -52,17 +33,15 @@ func TestToolCalls(t *testing.T) {
 	})
 
 	g.Go(func() error {
-		//callErr := CallLLM(groupCtx, languages_prompt, nil, resultChan)
+		callErr := CallLLM(groupCtx, "/Users/punk1290/git/october-talks-2025/example/birb-client", resultChan)
 		close(resultChan)
-		//if callErr != nil {
-		//	return callErr
-		//}
+		if callErr != nil {
+			return callErr
+		}
 		return nil
 	})
-
-	if err = g.Wait(); err != nil {
-		require.NoError(t, err)
-	}
+	
+	err := g.Wait()
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 }
